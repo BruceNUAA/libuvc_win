@@ -11,6 +11,11 @@
 #include <string.h>
 #include <pthread.h>
 #include <signal.h>
+#ifndef WIN32
+#include <libusb-1.0/libusb.h>
+#else
+#include <libusb.h>
+#endif
 #include "utlist.h"
 
 /** Converts an unaligned four-byte little-endian integer into an int32 */
@@ -215,6 +220,8 @@ typedef struct uvc_device_info {
  */
 #ifdef __APPLE__
 #define LIBUVC_NUM_TRANSFER_BUFS 8
+#elif WIN32
+#define LIBUVC_NUM_TRANSFER_BUFS 50
 #else
 #define LIBUVC_NUM_TRANSFER_BUFS 100
 #endif
@@ -249,6 +256,7 @@ struct uvc_stream_handle {
   uint8_t *transfer_bufs[LIBUVC_NUM_TRANSFER_BUFS];
   struct uvc_frame frame;
   enum uvc_frame_format frame_format;
+  int flying_xfers;
 };
 
 /** Handle on an open UVC device
@@ -266,10 +274,14 @@ struct uvc_device_handle {
   /** Function to call when we receive status updates from the camera */
   uvc_status_callback_t *status_cb;
   void *status_user_ptr;
+  /** Function to call when we receive button events from the camera */
+  uvc_button_callback_t *button_cb;
+  void *button_user_ptr;
 
   uvc_stream_handle_t *streams;
   /** Whether the camera is an iSight that sends one header per frame */
   uint8_t is_isight;
+  uint32_t claimed;
 };
 
 /** Context within which we communicate with devices */
@@ -281,7 +293,7 @@ struct uvc_context {
   /** List of open devices in this context */
   uvc_device_handle_t *open_devices;
   pthread_t handler_thread;
-  uint8_t kill_handler_thread;
+  int kill_handler_thread;
 };
 
 uvc_error_t uvc_query_stream_ctrl(

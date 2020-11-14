@@ -6,9 +6,18 @@ extern "C" {
 #endif
 
 #include <stdio.h> // FILE
-#include <libusb-1.0/libusb.h>
+#include <stdint.h>
+#ifndef WIN32
+#include <sys/time.h>
+#else
+#include <winsock.h>
+#endif
 #include <libuvc/libuvc_config.h>
-#include <errno.h>
+
+struct libusb_context;
+struct libusb_device_handle;
+
+
 /** UVC error types, based on libusb errors
  * @ingroup diag
  */
@@ -68,8 +77,16 @@ enum uvc_frame_format {
   UVC_FRAME_FORMAT_BGR,
   /** Motion-JPEG (or JPEG) encoded images */
   UVC_FRAME_FORMAT_MJPEG,
+  /** Greyscale images */
   UVC_FRAME_FORMAT_GRAY8,
+  UVC_FRAME_FORMAT_GRAY16,
+  /* Raw colour mosaic images */
   UVC_FRAME_FORMAT_BY8,
+  UVC_FRAME_FORMAT_BA81,
+  UVC_FRAME_FORMAT_SGRBG8,
+  UVC_FRAME_FORMAT_SGBRG8,
+  UVC_FRAME_FORMAT_SRGGB8,
+  UVC_FRAME_FORMAT_SBGGR8,
   /** Number of formats understood */
   UVC_FRAME_FORMAT_COUNT,
 };
@@ -85,6 +102,7 @@ enum uvc_frame_format {
 #define UVC_COLOR_FORMAT_BGR UVC_FRAME_FORMAT_BGR
 #define UVC_COLOR_FORMAT_MJPEG UVC_FRAME_FORMAT_MJPEG
 #define UVC_COLOR_FORMAT_GRAY8 UVC_FRAME_FORMAT_GRAY8
+#define UVC_COLOR_FORMAT_GRAY16 UVC_FRAME_FORMAT_GRAY16
 
 /** VideoStreaming interface descriptor subtype (A.6) */
 enum uvc_vs_desc_subtype {
@@ -381,6 +399,13 @@ typedef void(uvc_status_callback_t)(enum uvc_status_class status_class,
                                     void *data, size_t data_len,
                                     void *user_ptr);
 
+/** A callback function to accept button events
+ * @ingroup device
+ */
+typedef void(uvc_button_callback_t)(int button,
+                                    int state,
+                                    void *user_ptr);
+
 /** Structure representing a UVC device descriptor.
  *
  * (This isn't a standard structure.)
@@ -482,19 +507,28 @@ uvc_error_t uvc_find_device(
     uvc_device_t **dev,
     int vid, int pid, const char *sn);
 
+uvc_error_t uvc_find_devices(
+    uvc_context_t *ctx,
+    uvc_device_t ***devs,
+    int vid, int pid, const char *sn);
+
 uvc_error_t uvc_open(
     uvc_device_t *dev,
     uvc_device_handle_t **devh);
 void uvc_close(uvc_device_handle_t *devh);
 
 uvc_device_t *uvc_get_device(uvc_device_handle_t *devh);
-libusb_device_handle *uvc_get_libusb_handle(uvc_device_handle_t *devh);
+struct libusb_device_handle *uvc_get_libusb_handle(uvc_device_handle_t *devh);
 
 void uvc_ref_device(uvc_device_t *dev);
 void uvc_unref_device(uvc_device_t *dev);
 
 void uvc_set_status_callback(uvc_device_handle_t *devh,
                              uvc_status_callback_t cb,
+                             void *user_ptr);
+
+void uvc_set_button_callback(uvc_device_handle_t *devh,
+                             uvc_button_callback_t cb,
                              void *user_ptr);
 
 const uvc_input_terminal_t *uvc_get_camera_terminal(uvc_device_handle_t *devh);
@@ -697,6 +731,9 @@ uvc_error_t uvc_any2rgb(uvc_frame_t *in, uvc_frame_t *out);
 uvc_error_t uvc_yuyv2bgr(uvc_frame_t *in, uvc_frame_t *out);
 uvc_error_t uvc_uyvy2bgr(uvc_frame_t *in, uvc_frame_t *out);
 uvc_error_t uvc_any2bgr(uvc_frame_t *in, uvc_frame_t *out);
+
+uvc_error_t uvc_yuyv2y(uvc_frame_t *in, uvc_frame_t *out);
+uvc_error_t uvc_yuyv2uv(uvc_frame_t *in, uvc_frame_t *out);
 
 #ifdef LIBUVC_HAS_JPEG
 uvc_error_t uvc_mjpeg2rgb(uvc_frame_t *in, uvc_frame_t *out);
